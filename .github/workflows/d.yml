@@ -1,4 +1,3 @@
-
 name: Generate and Release Auth JSON
 
 on:
@@ -29,17 +28,17 @@ jobs:
       contents: write
     steps:
       - name: Setup .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
       - name: Generate account.json
         run: |
-          # 1. 先初始化控制台项目并添加依赖（必须在写入 Program.cs 之前，否则会覆盖）
+          # 1. 初始化控制台项目并添加依赖
           dotnet new console -n GenAuth -o . --force
           dotnet add package Newtonsoft.Json
 
-          # 2. 写入自定义的 Program.cs 覆盖默认模版
+          # 2. 写入调整好命名空间顺序的 Program.cs
           cat << 'EOF' > Program.cs
           using System;
           using System.IO;
@@ -48,11 +47,15 @@ jobs:
           using System.Text;
           using Newtonsoft.Json;
 
+          namespace MaiTechCore.AA;
+
           public enum AuthType { unauthorized, stricted, limitless }
+
           public static class Configs {
               public static AuthType authType;
               public static string authuserMD5 = "";
           }
+
           public class AuthenicationModel {
               public string authuser { get; set; }
               public string account { get; set; }
@@ -60,7 +63,6 @@ jobs:
               public string check { get; set; }
           }
 
-          namespace MaiTechCore.AA;
           public static class ApplicationAuthorization
           {
               private static byte[] _salt = new byte[15] { 130, 250, 243, 129, 219, 226, 129, 202, 229, 131, 231, 195, 141, 220, 197 };
@@ -100,7 +102,7 @@ jobs:
           }
           EOF
 
-          # 3. 编译并运行生成逻辑
+          # 3. 编译并运行
           dotnet run
 
       - name: Prepare Tag and JSON Content
@@ -118,7 +120,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create Release and Output JSON in Body
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.FINAL_TAG }}
           name: "Auth JSON Release - ${{ env.FINAL_TAG }}"
