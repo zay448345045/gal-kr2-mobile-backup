@@ -1,0 +1,126 @@
+name: Generate and Release Auth JSON
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag 名称 (留空则自动生成)'
+        required: false
+        default: ''
+      auth_user:
+        description: 'Auth Username'
+        required: false
+        default: 'Admin'
+      user_id:
+        description: 'User ID (uint)'
+        required: false
+        default: '123456'
+      is_god:
+        description: 'Generate God Mode JSON?'
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # 需要写入 Release 的权限
+    steps:
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Generate account.json
+        run: |
+          cat << 'EOF' > Program.cs
+          using System;
+          using System.IO;
+          using System.Linq;
+          using System.Security.Cryptography;
+          using System.Text;
+          using Newtonsoft.Json;
+
+          public enum AuthType { unauthorized, stricted, limitless }
+          public static class Configs {
+              public static AuthType authType;
+              public static string authuserMD5 = "";
+          }
+          public class AuthenicationModel {
+              public string authuser { get; set; }
+              public string account { get; set; }
+              public string key { get; set; }
+              public string check { get; set; }
+          }
+
+          namespace MaiTechCore.AA;
+          public static class ApplicationAuthorization
+          {
+              private static byte[] _salt = new byte[15] { 130, 250, 243, 129, 219, 226, 129, 202, 229, 131, 231, 195, 141, 220, 197 };
+              private static byte[] _godAccount = new byte[11] { 47, 37, 40, 33, 45, 32, 55, 39, 43, 52, 33 };
+              private static byte[] _godUsername = new byte[11] { 47, 37, 40, 33, 45, 32, 55, 39, 43, 52, 33 };
+              private static byte _key = 100;
+
+              public static string salt => Decrypt(_salt);
+              public static string godUsername => Decrypt(_godUsername);
+              public static string godAccount => Decrypt(_godAccount);
+
+              private static string Decrypt(byte[] maskedData) => Encoding.UTF8.GetString(maskedData.Select((byte b) => (byte)(b ^ _key)).ToArray());
+              
+              public static string CalcUserMD5(uint userid) => MD5.HashData(Encoding.UTF8.GetBytes(userid + salt)).Aggregate("", (string a, byte b) => a + b.ToString("x2"));
+              public static string GetJsonMD5(string user, string account, string key) => MD5.HashData(Encoding.UTF8.GetBytes(user + account + key + salt)).Aggregate("", (string a, byte b) => a + b.ToString("x2"));
+
+              public static string GenAuthJson(string authUser, uint userid, string key, bool isGod)
+              {
+                  AuthenicationModel authenicationModel = new AuthenicationModel { authuser = authUser, account = "", key = key, check = "0" };
+                  if (!isGod) { authenicationModel.account = CalcUserMD5(userid); }
+                  else { authenicationModel.account = godAccount; authenicationModel.authuser = godUsername; }
+                  authenicationModel.check = GetJsonMD5(authenicationModel.authuser, authenicationModel.account, authenicationModel.key);
+                  return JsonConvert.SerializeObject(authenicationModel);
+              }
+          }
+
+          class Program {
+              static void Main(string[] args) {
+                  string authUser = Environment.GetEnvironmentVariable("INPUT_AUTH_USER") ?? "Admin";
+                  uint userId = uint.Parse(Environment.GetEnvironmentVariable("INPUT_USER_ID") ?? "123456");
+                  bool isGod = bool.Parse(Environment.GetEnvironmentVariable("INPUT_IS_GOD") ?? "true");
+                  string key = "auth_key_bypass";
+
+                  string json = MaiTechCore.AA.ApplicationAuthorization.GenAuthJson(authUser, userId, key, isGod);
+                  File.WriteAllText("account.json", json);
+              }
+          }
+          EOF
+
+          dotnet new console -n GenAuth -o . --force
+          dotnet add package Newtonsoft.Json
+          dotnet run
+
+      - name: Read JSON to Environment
+        id: read_json
+        run: |
+          JSON_CONTENT=$(cat account.json)
+          # 多行文本在 GitHub Actions 中的处理方式
+          echo "json_content<<EOF" >> $GITHUB_OUTPUT
+          echo "$JSON_CONTENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+          # 生成一个基于时间戳的 Tag 名称
+          echo "TAG_NAME=auth-$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_ENV
+
+      - name: Create Release and Output JSON in Body
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          name: "Auth JSON Release - ${{ env.TAG_NAME }}"
+          files: account.json
+          body: |
+            ### 🔑 自动生成的 account.json 凭证
+            
+            你可以直接复制下方的 JSON 内容保存为 `account.json` 使用，或者下载附件中的文件：
+            
+            ```json
+            ${{ steps.read_json.outputs.json_content }}
+            ```
