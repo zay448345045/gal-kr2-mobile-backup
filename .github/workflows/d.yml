@@ -1,3 +1,4 @@
+
 name: Generate and Release Auth JSON
 
 on:
@@ -25,7 +26,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # 需要写入 Release 的权限
+      contents: write
     steps:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
@@ -34,6 +35,11 @@ jobs:
 
       - name: Generate account.json
         run: |
+          # 1. 先初始化控制台项目并添加依赖（必须在写入 Program.cs 之前，否则会覆盖）
+          dotnet new console -n GenAuth -o . --force
+          dotnet add package Newtonsoft.Json
+
+          # 2. 写入自定义的 Program.cs 覆盖默认模版
           cat << 'EOF' > Program.cs
           using System;
           using System.IO;
@@ -94,27 +100,28 @@ jobs:
           }
           EOF
 
-          dotnet new console -n GenAuth -o . --force
-          dotnet add package Newtonsoft.Json
+          # 3. 编译并运行生成逻辑
           dotnet run
 
-      - name: Read JSON to Environment
-        id: read_json
+      - name: Prepare Tag and JSON Content
+        id: prep
         run: |
+          INPUT_TAG="${{ github.event.inputs.tag_name }}"
+          if [ -z "$INPUT_TAG" ]; then
+            INPUT_TAG="auth-$(date +'%Y%m%d-%H%M%S')"
+          fi
+          echo "FINAL_TAG=$INPUT_TAG" >> $GITHUB_ENV
+
           JSON_CONTENT=$(cat account.json)
-          # 多行文本在 GitHub Actions 中的处理方式
           echo "json_content<<EOF" >> $GITHUB_OUTPUT
           echo "$JSON_CONTENT" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
-          
-          # 生成一个基于时间戳的 Tag 名称
-          echo "TAG_NAME=auth-$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_ENV
 
       - name: Create Release and Output JSON in Body
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ env.TAG_NAME }}
-          name: "Auth JSON Release - ${{ env.TAG_NAME }}"
+          tag_name: ${{ env.FINAL_TAG }}
+          name: "Auth JSON Release - ${{ env.FINAL_TAG }}"
           files: account.json
           body: |
             ### 🔑 自动生成的 account.json 凭证
@@ -122,5 +129,5 @@ jobs:
             你可以直接复制下方的 JSON 内容保存为 `account.json` 使用，或者下载附件中的文件：
             
             ```json
-            ${{ steps.read_json.outputs.json_content }}
+            ${{ steps.prep.outputs.json_content }}
             ```
