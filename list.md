@@ -1,5 +1,7 @@
 夏ノ音。ギャルと、オタクと、秘密の放課後。
 [![Total Downloads](https://img.shields.io/github/downloads/zay448345045/galgame-arm64-backup/total?style=for-the-badge&color=2ea44f&logo=github)](https://github.com/zay448345045/galgame-arm64-backup/releases)
+
+[![Total Downloads](https://img.shields.io/github/downloads/MakiseYu/sdvx-android-releases/total?style=for-the-badge&color=2ea44f&logo=github)](https://github.com/MakiseYu/sdvx-android-releases/releases)
 都重制了就不能把fov触控啥的改一改吗？
 我录个视频晕死了，不支持手柄
 支持多人联机，本地联机
