@@ -459,4 +459,3 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
 
-```
